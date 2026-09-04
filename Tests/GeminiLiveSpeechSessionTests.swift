@@ -95,6 +95,23 @@ private actor MockGeminiLiveSocket: GeminiLiveSocket {
   }
 }
 
+private final class EndpointCapture: @unchecked Sendable {
+  private let lock = NSLock()
+  private var endpoint: GeminiLiveEndpoint?
+
+  var value: GeminiLiveEndpoint? {
+    lock.lock()
+    defer { lock.unlock() }
+    return endpoint
+  }
+
+  func record(_ endpoint: GeminiLiveEndpoint) {
+    lock.lock()
+    self.endpoint = endpoint
+    lock.unlock()
+  }
+}
+
 final class GeminiLiveSpeechSessionTests: XCTestCase {
   func testTranscriptionSetupUsesDocumentedLiveModelAndManualPushToTalk() throws {
     let message = GeminiLiveSpeechSession.setupMessage(for: .transcribe)
@@ -140,26 +157,60 @@ final class GeminiLiveSpeechSessionTests: XCTestCase {
     XCTAssertEqual(translation["echoTargetLanguage"] as? Bool, true)
   }
 
-  func testCredentialSelectsCorrectWebSocketMethodAndQueryName() throws {
-    let apiKeyURL = try GeminiLiveSpeechSession.endpointURL(
+  func testAPIKeyTravelsInHeaderAndNeverInTheURL() throws {
+    let endpoint = try GeminiLiveSpeechSession.endpoint(
       credential: .apiKey("development-key")
     )
-    XCTAssertTrue(apiKeyURL.path.hasSuffix("GenerativeService.BidiGenerateContent"))
-    XCTAssertEqual(
-      URLComponents(url: apiKeyURL, resolvingAgainstBaseURL: false)?.queryItems?.first?.name,
-      "key"
-    )
+    XCTAssertTrue(endpoint.url.path.hasSuffix("GenerativeService.BidiGenerateContent"))
+    XCTAssertEqual(endpoint.headers, ["x-goog-api-key": "development-key"])
+    XCTAssertNil(endpoint.url.query)
+    XCTAssertFalse(endpoint.url.absoluteString.contains("development-key"))
+  }
 
-    let tokenURL = try GeminiLiveSpeechSession.endpointURL(
+  func testEphemeralTokenUsesConstrainedMethodWithDocumentedQuery() throws {
+    let endpoint = try GeminiLiveSpeechSession.endpoint(
       credential: .ephemeralToken("auth_tokens/short-lived")
     )
     XCTAssertTrue(
-      tokenURL.path.hasSuffix("GenerativeService.BidiGenerateContentConstrained")
+      endpoint.url.path.hasSuffix("GenerativeService.BidiGenerateContentConstrained")
     )
+    XCTAssertTrue(endpoint.headers.isEmpty)
     XCTAssertEqual(
-      URLComponents(url: tokenURL, resolvingAgainstBaseURL: false)?.queryItems?.first?.name,
-      "access_token"
+      URLComponents(url: endpoint.url, resolvingAgainstBaseURL: false)?.queryItems,
+      [URLQueryItem(name: "access_token", value: "auth_tokens/short-lived")]
     )
+  }
+
+  func testPlaceholderCredentialsAreRejectedBeforeConnecting() {
+    for placeholder in ["", "   ", "YOUR_GEMINI_API_KEY", "__GEMINI_API_KEY__"] {
+      XCTAssertThrowsError(
+        try GeminiLiveSpeechSession.endpoint(credential: .apiKey(placeholder))
+      ) { error in
+        guard case GeminiLiveSpeechError.missingCredential? = error as? GeminiLiveSpeechError
+        else {
+          return XCTFail("Expected missingCredential for \(placeholder.debugDescription)")
+        }
+      }
+    }
+  }
+
+  func testConnectHandsTheResolvedEndpointToTheSocketFactory() async throws {
+    let socket = MockGeminiLiveSocket()
+    let capturedEndpoint = EndpointCapture()
+    let session = GeminiLiveSpeechSession(
+      mode: .transcribe,
+      socketFactory: { endpoint in
+        capturedEndpoint.record(endpoint)
+        return socket
+      }
+    )
+    try await socket.enqueueJSONObject(["setupComplete": [:]])
+    try await session.connect(credential: .apiKey("development-key"))
+
+    let endpoint = try XCTUnwrap(capturedEndpoint.value)
+    XCTAssertEqual(endpoint.headers["x-goog-api-key"], "development-key")
+    XCTAssertNil(endpoint.url.query)
+    await session.cancel()
   }
 
   func testParserReadsIncrementalAndFinalServerEvents() throws {

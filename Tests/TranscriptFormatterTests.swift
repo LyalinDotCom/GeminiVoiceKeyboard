@@ -1,5 +1,7 @@
 import XCTest
 
+@testable import GeminiVoice
+
 final class TranscriptFormatterTests: XCTestCase {
   func testTranslationCleanerUnwrapsKnownJSONEnvelopesOnly() {
     XCTAssertEqual(

@@ -160,6 +160,12 @@ extension RelayController {
       return
     }
     isKeyboardHandoffActive = true
+    // Once the bounded automatic return has been exhausted for this request,
+    // the manual swipe-back guidance must stay on screen. Re-arming here on
+    // every poll would clear that flag within 200 ms and loop the private
+    // return attempts until the request expires. A later scene activation or
+    // a new deep link resets the flag and gets a fresh bounded attempt.
+    guard !requiresManualKeyboardReturn else { return }
     scheduleAutomaticReturnToKeyboard(
       requestID: request.requestID,
       originatingApplicationBundleIdentifier:

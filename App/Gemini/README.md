@@ -23,3 +23,5 @@ The socket abstraction makes protocol behavior testable without a real network. 
 ## Authentication boundary
 
 The sample accepts a directly supplied API key for a personal Debug build. That is intentionally convenient and intentionally not production-safe. A production architecture should proxy batch calls through an authenticated backend and mint constrained, short-lived ephemeral tokens for direct Live connections.
+
+Both clients send the API key as the `x-goog-api-key` request header. The Live WebSocket accepts that header on the handshake, so the key never appears in a URL that URLSession, proxies, or crash logs might record. Ephemeral tokens use the `access_token` query form that the constrained Live endpoint documents.

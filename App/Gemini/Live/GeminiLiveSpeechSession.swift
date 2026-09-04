@@ -16,7 +16,7 @@ actor GeminiLiveSpeechSession {
     case serviceError(String)
   }
 
-  typealias SocketFactory = @Sendable (URL) -> any GeminiLiveSocket
+  typealias SocketFactory = @Sendable (GeminiLiveEndpoint) -> any GeminiLiveSocket
 
   static let transcriptionModel = "gemini-3.5-transcribe-live"
   static let translationModel = "gemini-3.5-live-translate-preview"
@@ -49,8 +49,8 @@ actor GeminiLiveSpeechSession {
 
   init(
     mode: Mode,
-    socketFactory: @escaping SocketFactory = { url in
-      URLSessionGeminiLiveSocket(url: url)
+    socketFactory: @escaping SocketFactory = { endpoint in
+      URLSessionGeminiLiveSocket(endpoint: endpoint)
     },
     progressHandler: (@Sendable (String) -> Void)? = nil
   ) {
@@ -69,8 +69,8 @@ actor GeminiLiveSpeechSession {
       throw GeminiLiveSpeechError.alreadyConnected
     }
 
-    let url = try Self.endpointURL(credential: credential)
-    let socket = socketFactory(url)
+    let endpoint = try Self.endpoint(credential: credential)
+    let socket = socketFactory(endpoint)
     self.socket = socket
     await socket.start()
 

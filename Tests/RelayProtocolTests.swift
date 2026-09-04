@@ -1,6 +1,8 @@
 import Foundation
 import XCTest
 
+@testable import GeminiVoice
+
 final class RelayProtocolTests: XCTestCase {
   private var suiteName: String!
   private var defaults: UserDefaults!

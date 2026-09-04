@@ -1,6 +1,8 @@
 import Foundation
 import XCTest
 
+@testable import GeminiVoice
+
 private final class MockURLProtocol: URLProtocol {
   static var handler: ((URLRequest) throws -> (HTTPURLResponse, Data))?
   static var startLoadingCount = 0

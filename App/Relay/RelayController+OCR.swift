@@ -111,14 +111,15 @@ extension RelayController {
           apiKey: apiKey,
           model: model
         )
-        store.publishTranscript(text, requestID: requestID, kind: .ocr)
-        history.insert(
-          TranscriptHistoryItem(text: text, createdAt: Date()),
-          at: 0
-        )
-        if history.count > 20 {
-          history.removeLast(history.count - 20)
+        // OCR has no audio to protect, so a history failure must not block
+        // the keyboard result. Go through the store so the entry survives a
+        // relaunch and is not dropped when the next dictation reloads history.
+        do {
+          try addToHistory(text)
+        } catch {
+          NSLog("OCR_HISTORY_SAVE_FAILED error=%@", error.localizedDescription)
         }
+        store.publishTranscript(text, requestID: requestID, kind: .ocr)
         ocrMessage = "OCR ready — return to the keyboard and tap Insert OCR"
       } catch {
         ocrMessage = error.localizedDescription

@@ -1,8 +1,8 @@
 import Foundation
 
 extension GeminiLiveSpeechSession {
-  static func endpointURL(credential: GeminiLiveCredential) throws -> URL {
-    guard let queryItem = credential.queryItem else {
+  static func endpoint(credential: GeminiLiveCredential) throws -> GeminiLiveEndpoint {
+    guard let transport = credential.transport else {
       throw GeminiLiveSpeechError.missingCredential
     }
     guard
@@ -13,11 +13,17 @@ extension GeminiLiveSpeechSession {
     else {
       throw GeminiLiveSpeechError.invalidEndpoint
     }
-    components.queryItems = [queryItem]
+    var headers: [String: String] = [:]
+    switch transport {
+    case .header(let field, let value):
+      headers[field] = value
+    case .query(let queryItem):
+      components.queryItems = [queryItem]
+    }
     guard let url = components.url else {
       throw GeminiLiveSpeechError.invalidEndpoint
     }
-    return url
+    return GeminiLiveEndpoint(url: url, headers: headers)
   }
 
   static func setupMessage(for mode: Mode) -> [String: Any] {
